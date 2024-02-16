@@ -9,7 +9,7 @@
 
 2. Update AWS configuration in .env file.
 
-3. Navigate to the `log_backend_server` folder and run
+3. Run the following cmd
 
 ```bash
  uvicorn main:app --host 0.0.0.0 --port 8002 --reload
