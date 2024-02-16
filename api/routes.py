@@ -16,7 +16,7 @@ async def ingest_logs(logs:List[str]):
             rounded_timestamp = round_to_nearest_hour(timestamp)
             parsed_logs.append(log_message)
             s3_key = generate_s3_key(rounded_timestamp, service, log_level)
-            if upload_logs_to_s3(log_message, s3_key):
+            if upload_logs_to_s3(log_message.strip(), s3_key):
                 print(f"Log ingested successfully: {s3_key}")
             else:
                 print(f"Log not ingested: {s3_key}")
