@@ -12,7 +12,7 @@ aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = 'mw-code-tester'
 AWS_REGION =  'ap-south-1'
 
-CANDIDATE_NAME = "DHRUV"
+CANDIDATE_NAME = "test410"
 
 
 def round_to_nearest_hour(timestamp_str):
@@ -28,28 +28,34 @@ def round_to_nearest_hour(timestamp_str):
 def parse_log_entry(log_entry):
     timestamp_str, log_level, service, log_message = log_entry.split(' ', 3)
     service = service.strip('[]')
-    return timestamp_str, service, log_level, log_message
+    return timestamp_str, service, log_level, log_message.strip()
 
 def generate_s3_key(timestamp, service, log_level):
     key = f"mw-code-tester/{CANDIDATE_NAME}/{timestamp}/{service}/{log_level}/summary.log"
     return key
 
 def retrive_logs_from_s3(s3,key):
-    response = s3.get_object(Bucket=S3_BUCKET, Key=key)
-    content = response['Body'].read().decode('utf-8')
-    return content
+    try:
+        response = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response['Body'].read().decode('utf-8')
+        return content
+    except Exception as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            print(f"The key '{key}' does not exist in the S3 bucket.")
+        else:
+            print(f"An error occurred: {e}")
+        return ""              
 
-def upload_logs_to_s3(log_message, key):
+def upload_logs_to_s3(log_message,log_count,key):
     try:
         existing_content = ""
         s3 = boto3.client('s3', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region_name=AWS_REGION)
-
         existing_content = retrive_logs_from_s3(s3,key)
         updated_content = log_message
         # Append new content to existing content
         if existing_content != "":
                 search_line = next((line for line in existing_content.split('\n') if log_message in line), None)
-                existing_counter_value = 1
+                existing_counter_value = log_count
                 if search_line:
                     match = re.match(r"(\d+)", search_line)
                     if match:
