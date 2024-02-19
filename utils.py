@@ -1,6 +1,6 @@
 import boto3
 from fastapi import HTTPException
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import os
 import re
@@ -12,7 +12,7 @@ aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = 'mw-code-tester'
 AWS_REGION =  'ap-south-1'
 
-CANDIDATE_NAME = "DHRUV-SUTHAR"
+CANDIDATE_NAME = "Middleware-NEW"
 
 def handle_s3_exception(e):
     error_code = e.response['Error']['Code']
@@ -38,9 +38,16 @@ def round_to_nearest_hour(timestamp_str):
     return f"{rounded_timestamp.isoformat()}-{formatted_timestamp}"
 
 def parse_log_entry(log_entry):
-    timestamp_str, log_level, service, log_message = log_entry.split(' ', 3)
-    service = service.strip('[]')
-    return timestamp_str, service, log_level, log_message.strip()
+    pattern = r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\s+(?P<level>[A-Z]+)\s+\[(?P<service>[^\]]+)\]\s+(?P<message>.*)$"
+    match = re.search(pattern,log_entry)
+    if match:
+        timestamp_str = match.group("timestamp")
+        log_level = match.group("level")
+        service = match.group("service")
+        service = service.strip("[]")
+        log_message = match.group("message")
+    
+    return timestamp_str.strip(), service.strip(), log_level.strip(), log_message.strip()
 
 def generate_s3_key(timestamp, service, log_level):
     key = f"{CANDIDATE_NAME}/{timestamp}/{service}/{log_level}/summary.log"
@@ -92,7 +99,7 @@ def upload_log_to_s3(log_message,log_count,key):
     except Exception as e:
         return handle_s3_exception(e)
 
-def retrive_logs_from_s3_for_candidate():
+def retrive_logs_from_s3_for_candidate(start_timestamp=None,end_timestamp=None,search_by_timestamp=False):
     try:
         s3 = boto3.client('s3', aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key,region_name=AWS_REGION)
         # List all objects in the S3 bucket for the candidate
@@ -112,21 +119,23 @@ def retrive_logs_from_s3_for_candidate():
                             'severity': level_type,
                             'log': log
                         })
-        
+        if start_timestamp and end_timestamp and search_by_timestamp == True:
+            return get_logs_by_timestamp(start_timestamp,end_timestamp,all_logs)
         return get_top_log(all_logs) if all_logs else f'No logs found for this candidate: {CANDIDATE_NAME}'
     except Exception as e:
         return handle_s3_exception(e)
          
 def get_top_log(all_logs):
+    print(all_logs)
     # Find the log with the highest count by extracting digits at the beginning of particular log  
     max_log = max(all_logs, key=lambda log: int(re.match(r"(\d+)", log['log']).group(1)), default=None)
 
     # Extract the top error, count, service, and severity type from the max log
     if max_log:
-        match = re.match(r"(\d+)", max_log['log'])
-        count = int(match.group(1))
-        prefix = f"{str(count)} - "
-        top_error = max_log['log'][len(prefix):]
+        match = re.match(r"(\d+)", max_log['log']) #count value
+        count = int(match.group(1)) #count value typecasted
+        prefix = f"{str(count)} - " # 
+        top_error = max_log['log'][len(prefix):] # NO_OF_COUNT - MSG
         service = max_log['service']
         severity = max_log['severity']
 
@@ -138,4 +147,27 @@ def get_top_log(all_logs):
         }
     else:
          return {}
-                    
+
+def get_logs_by_timestamp(start,end,all_logs):
+
+    start_datetime = datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+    end_datetime = datetime.strptime(end, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+
+    result_logs = []
+    # Filter logs based on timestamps
+    for log in all_logs:
+        log_date, log_timestamp = log['timestamp'].split('T')
+        log_start, log_end = log_timestamp.split('-')
+        log_start_timestamp = f'{log_date}T{log_start}'
+        log_end_timestamp = f'{log_date}T{log_end}'
+        if start_datetime <= datetime.fromisoformat(log_end_timestamp).replace(tzinfo=timezone.utc)  <= end_datetime:
+        # if (start_datetime >= datetime.fromisoformat(log_start_timestamp).replace(tzinfo=timezone.utc)) or (end_datetime <= datetime.fromisoformat(log_end_timestamp).replace(tzinfo=timezone.utc)):
+            match = re.match(r"(\d+)", log['log'])
+            count = int(match.group(1))
+            prefix = f"{str(count)} - " 
+            updated_log_msg = log['log'][len(prefix):]
+            log['log'] = updated_log_msg
+            log['count'] = count 
+            result_logs.append(log)
+
+    return result_logs

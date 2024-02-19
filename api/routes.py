@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from typing import List
@@ -38,4 +38,18 @@ async def top_count():
     except Exception as e:
         raise HTTPException(status_code=e.status_code, detail=str(e.detail))
     
-    
+@router.get('/search-by-timestamp')
+async def search_by_timestamp(start: str = Query(..., description="Start timestamp"),
+                               end: str = Query(..., description="End timestamp")):
+    try:
+        # Filter data based on start and end timestamps
+        logs = retrive_logs_from_s3_for_candidate(start_timestamp=start,end_timestamp=end,search_by_timestamp=True)
+        
+        # Return the filtered data as JSON
+        return JSONResponse(content={'message': logs}, status_code=200)
+
+    except Exception as e:
+        # Handle exceptions if necessary
+        return {"error": str(e)}
+
+
