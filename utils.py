@@ -12,7 +12,7 @@ aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 S3_BUCKET = 'mw-code-tester'
 AWS_REGION =  'ap-south-1'
 
-CANDIDATE_NAME = "Middleware-NEW"
+CANDIDATE_NAME = "Middleware-NEW-XYZ"
 
 def handle_s3_exception(e):
     error_code = e.response['Error']['Code']
@@ -44,7 +44,6 @@ def parse_log_entry(log_entry):
         timestamp_str = match.group("timestamp")
         log_level = match.group("level")
         service = match.group("service")
-        service = service.strip("[]")
         log_message = match.group("message")
     
     return timestamp_str.strip(), service.strip(), log_level.strip(), log_message.strip()
@@ -150,18 +149,19 @@ def get_top_log(all_logs):
 
 def get_logs_by_timestamp(start,end,all_logs):
 
-    start_datetime = datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-    end_datetime = datetime.strptime(end, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+    start_datetime = datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ')
+    end_datetime = datetime.strptime(end, '%Y-%m-%dT%H:%M:%SZ')
 
+    if start_datetime.time().hour == end_datetime.time().hour:
+            end_datetime = end_datetime.replace(second=0, microsecond=0, minute=0) + timedelta(hours=1)
+            
     result_logs = []
     # Filter logs based on timestamps
     for log in all_logs:
         log_date, log_timestamp = log['timestamp'].split('T')
-        log_start, log_end = log_timestamp.split('-')
-        log_start_timestamp = f'{log_date}T{log_start}'
+        _, log_end = log_timestamp.split('-')
         log_end_timestamp = f'{log_date}T{log_end}'
-        if start_datetime <= datetime.fromisoformat(log_end_timestamp).replace(tzinfo=timezone.utc)  <= end_datetime:
-        # if (start_datetime >= datetime.fromisoformat(log_start_timestamp).replace(tzinfo=timezone.utc)) or (end_datetime <= datetime.fromisoformat(log_end_timestamp).replace(tzinfo=timezone.utc)):
+        if start_datetime <= datetime.fromisoformat(log_end_timestamp)  <= end_datetime:
             match = re.match(r"(\d+)", log['log'])
             count = int(match.group(1))
             prefix = f"{str(count)} - " 

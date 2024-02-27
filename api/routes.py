@@ -4,12 +4,15 @@ from fastapi.responses import JSONResponse
 from typing import List
 from utils import parse_log_entry, generate_s3_key, upload_log_to_s3, round_to_nearest_hour, retrive_logs_from_s3_for_candidate
 from collections import defaultdict
+from fastapi import Request
 router = APIRouter()
 
 
 @router.post('/ingest')
-async def ingest_logs(logs:List[str]):
+async def ingest_logs(request:Request,logs:List[str]):
     try:
+        print("radom_uuid  from ingest_logs >> ",request.state.random_uuid)
+
         log_counts = defaultdict(int)
 
         for log_entry in logs:
